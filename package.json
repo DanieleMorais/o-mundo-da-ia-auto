@@ -1,0 +1,8 @@
+{
+  "name": "o-mundo-da-ia-auto",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Robo diario do blog IA no Dia a Dia (omundodaia.blogspot.com)",
+  "type": "commonjs",
+  "scripts": { "post": "node scripts/daily-post.js" }
+}
