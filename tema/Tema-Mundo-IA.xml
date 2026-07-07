@@ -6,6 +6,11 @@
 <meta content='width=device-width, initial-scale=1' name='viewport'/>
 <meta content='ca-pub-1623504542591354' name='google-adsense-account'/>
 <b:include data='blog' name='all-head-content'/>
+<link rel='icon' href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%F0%9F%A4%96%3C/text%3E%3C/svg%3E"/>
+<script async='async' src='https://www.googletagmanager.com/gtag/js?id=G-QF04SZVHS5'></script>
+<script>//<![CDATA[
+window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-QF04SZVHS5');
+//]]></script>
 <meta content='index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1' name='robots'/>
 <meta content='summary_large_image' name='twitter:card'/>
 <title><b:if cond='data:view.isHomepage'><data:blog.title/></b:if><b:if cond='!data:view.isHomepage'><data:view.title.escaped/> ~ <data:blog.title/></b:if></title>
@@ -285,7 +290,7 @@ function setTema(t){document.documentElement.className='t-'+t;try{localStorage.s
     if(desc){data.description=desc;}
     if(pub){data.datePublished=pub;data.dateModified=mtag("article:modified_time")||pub;}
     var s=document.createElement("script");s.type="application/ld+json";s.id="ld-post";s.textContent=JSON.stringify(data);
-    document.head.appendChild(s);
+    document.head.appendChild(s);try{var fh=Array.prototype.slice.call(document.querySelectorAll(".artbody h2")).filter(function(h){return /pergunt|faq/i.test(h.textContent)})[0];if(fh){var fq=[],e=fh.nextElementSibling;while(e&&e.tagName!="H2"){if(e.tagName=="H3"){var q=e.textContent.trim(),a="",n=e.nextElementSibling;while(n&&n.tagName!="H2"&&n.tagName!="H3"){if(n.textContent)a+=n.textContent.trim()+" ";n=n.nextElementSibling}if(q&&a)fq.push({"@type":"Question",name:q,acceptedAnswer:{"@type":"Answer",text:a.trim()}})}e=e.nextElementSibling}if(fq.length&&!document.getElementById("ld-faq")){var f2=document.createElement("script");f2.type="application/ld+json";f2.id="ld-faq";f2.textContent=JSON.stringify({"@context":"https://schema.org","@type":"FAQPage",mainEntity:fq});document.head.appendChild(f2)}}}catch(er){}
   }
   function boot(){ run(); cookieBanner(); injectJsonLd(); }
   if(document.readyState!="loading"){boot();}else{document.addEventListener("DOMContentLoaded",boot);}
