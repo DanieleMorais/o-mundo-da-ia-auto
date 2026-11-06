@@ -1,15 +1,9 @@
 // Robô diário: publica 1 artigo premium sobre INTELIGÊNCIA ARTIFICIAL no blog "IA no Dia a Dia".
 // Rodado pelo GitHub Actions. Credenciais vêm de secrets. Mesma máquina do blog de finanças.
-const CLIENT_ID = process.env.BLOGGER_CLIENT_ID;
-const CLIENT_SECRET = process.env.BLOGGER_CLIENT_SECRET;
-const REFRESH = process.env.BLOGGER_REFRESH_TOKEN;
-const BLOG_ID = process.env.BLOGGER_BLOG_ID;
+const { publicar, listarPublicados, exigirCredenciais, iaDuble } = require("./publicar");
 const IMG_BASE = process.env.IMG_BASE || ""; // ex: https://img.ianodiaadia.com  (vazio = usa Pollinations direto)
 
-if (!CLIENT_ID || !CLIENT_SECRET || !REFRESH || !BLOG_ID) {
-  console.error("❌ Faltam secrets do Blogger.");
-  process.exit(1);
-}
+exigirCredenciais("❌ Faltam secrets do Blogger.");
 
 const NEWS_Q = {
   Modelos: "novo modelo IA GPT Gemini Claude LLM lançamento",
@@ -76,19 +70,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const norm = s => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
 function slugify(s) { return (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 70) || "ia"; }
 
-async function getToken() {
-  const r = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ client_id: CLIENT_ID, client_secret: CLIENT_SECRET, refresh_token: REFRESH, grant_type: "refresh_token" }) });
-  const j = await r.json();
-  if (!j.access_token) throw new Error("token: " + JSON.stringify(j));
-  return j.access_token;
-}
 
-async function titulosExistentes() {
-  try {
-    const r = await fetch(`https://www.blogger.com/feeds/${BLOG_ID}/posts/default?alt=json&max-results=500`, { headers: { "User-Agent": "Mozilla/5.0" } });
-    return (((await r.json()).feed || {}).entry || []).map(e => norm(e.title.$t));
-  } catch { return []; }
-}
+async function titulosExistentes() { return (await listarPublicados()).map(e => norm(e.title && e.title.$t)); }
 
 async function buscarNoticias(catKey) {
   const query = NEWS_Q[catKey] || "inteligência artificial";
@@ -106,6 +89,7 @@ async function buscarNoticias(catKey) {
 
 const OR_KEY = process.env.OPENROUTER_API_KEY || "";
 async function callAI(prompt) {
+  if (process.env.IA_DUBLE === "1") return iaDuble(prompt);
   const GK = process.env.GEMINI_API_KEY;
   if (GK) for (const model of ["gemini-3.1-flash-lite", "gemini-flash-latest"]) for (let t = 0; t < 3; t++) { try { const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GK}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.85, maxOutputTokens: 8000 } }), signal: AbortSignal.timeout(120000) }); if (r.status === 429 || r.status >= 500) { await sleep(15000); continue; } if (!r.ok) break; const c = ((await r.json()).candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("").trim(); if (c && c.length > 400) return c; } catch { await sleep(6000); } }
   for (let t = 0; t < 4; t++) { try { const r = await fetch("https://text.pollinations.ai/openai", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ model: "openai-fast", messages: [{ role: "user", content: prompt }], temperature: 0.8 }), signal: AbortSignal.timeout(90000) }); if (r.status === 429) { await sleep(20000); continue; } if (!r.ok) { await sleep(8000); continue; } const c = (await r.json()).choices?.[0]?.message?.content?.trim(); if (c && c.length > 400) return c; } catch { await sleep(6000); } }
@@ -172,9 +156,7 @@ async function notifyGoogle(postUrl) {
   const html = montar(art, img, tema, noticias);
   const label = CAT_LABEL[catKey] || "IA";
 
-  const token = await getToken();
-  const pr = await fetch(`https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts/?isDraft=false`, { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ kind: "blogger#post", title: art.titulo, content: html, labels: [label] }) });
-  const pd = await pr.json();
+  const pd = await publicar({ titulo: art.titulo, html, label, capa: img });
   if (pd.url) { console.log("✅ PUBLICADO:", art.titulo, "→", pd.url); await notifyGoogle(pd.url); }
-  else { console.error("❌ FALHA:", JSON.stringify(pd.error?.message || pd).slice(0, 200)); process.exit(1); }
+  else { console.error("❌ FALHA:", JSON.stringify(pd.erro).slice(0, 200)); process.exit(1); }
 })().catch(e => { console.error("FALHA GERAL:", e.message); process.exit(1); });

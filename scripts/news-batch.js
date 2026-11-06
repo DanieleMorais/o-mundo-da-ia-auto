@@ -1,16 +1,13 @@
 // Publica ATÉ 10 matérias com as últimas notícias de IA por execução (rodado de 4 em 4 horas).
 // Credenciais vêm de secrets (env). Dedup pelo feed do blog — nunca repete.
-const CLIENT_ID = process.env.BLOGGER_CLIENT_ID;
-const CLIENT_SECRET = process.env.BLOGGER_CLIENT_SECRET;
-const REFRESH = process.env.BLOGGER_REFRESH_TOKEN;
-const BLOG_ID = process.env.BLOGGER_BLOG_ID;
+const { publicar, listarPublicados, exigirCredenciais } = require("./publicar");
 const OR_KEY = process.env.OPENROUTER_API_KEY;
 const IMG_BASE = process.env.IMG_BASE || "";
 const SA_JSON = process.env.GOOGLE_SA_JSON || "";
 const PER_RUN = parseInt(process.env.PER_RUN || "10", 10);
 const crypto = require("crypto");
 
-if (!CLIENT_ID || !CLIENT_SECRET || !REFRESH || !BLOG_ID) { console.error("❌ Faltam secrets do Blogger."); process.exit(1); }
+exigirCredenciais("❌ Faltam secrets do Blogger.");
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const norm = s => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
@@ -24,13 +21,7 @@ const QUERIES = [
 ];
 const CATS = ["Modelos de IA", "Ferramentas de IA", "ChatGPT", "IA de Imagem", "IA de Vídeo", "IA nos Negócios", "Ciência & Pesquisa"];
 
-async function getToken() {
-  const r = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ client_id: CLIENT_ID, client_secret: CLIENT_SECRET, refresh_token: REFRESH, grant_type: "refresh_token" }) });
-  return (await r.json()).access_token;
-}
-async function existentes() {
-  try { const r = await fetch(`https://www.blogger.com/feeds/${BLOG_ID}/posts/default?alt=json&max-results=500`); return (((await r.json()).feed || {}).entry || []).map(e => norm(e.title.$t)); } catch { return []; }
-}
+async function existentes() { return (await listarPublicados()).map(e => norm(e.title && e.title.$t)); }
 async function coletar() {
   const vistos = new Set(), lista = [];
   const qs = QUERIES.slice().sort(() => 0.5 - Math.random()); // varia a ordem a cada run
@@ -97,7 +88,6 @@ async function notifyGoogle(url) {
   const jaTem = tit => { const w = norm(tit).split(" ").filter(x => x.length > 3); return jaTitulos.some(t => w.filter(x => t.includes(x)).length >= Math.max(4, Math.ceil(w.length * 0.7))); };
   let noticias = (await coletar()).filter(n => !jaTem(n.titulo));
   console.log("manchetes novas disponíveis:", noticias.length, "| meta desta run:", PER_RUN);
-  let token = await getToken();
   let ok = 0;
   for (let i = 0; i < noticias.length && ok < PER_RUN; i++) {
     const n = noticias[i];
@@ -109,12 +99,11 @@ async function notifyGoogle(url) {
     const label = CATS[Math.floor(Math.random() * CATS.length)];
     let done = false;
     for (let a = 0; a < 3 && !done; a++) {
-      const pr = await fetch(`https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts/?isDraft=false`, { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ kind: "blogger#post", title: art.titulo, content: html, labels: [label] }) });
-      const pd = await pr.json();
+      const pd = await publicar({ titulo: art.titulo, html, label, capa: img });
       if (pd.url) { ok++; done = true; jaTitulos.push(norm(art.titulo)); console.log(`${ok} OK: ${art.titulo.slice(0, 46)}`); notifyGoogle(pd.url); }
-      else if (pr.status === 401) { token = await getToken(); }
-      else if (pr.status === 403 || pr.status === 429) { console.log("quota, 40s..."); await sleep(40000); }
-      else { done = true; console.log("FALHA:", JSON.stringify(pd.error?.message || pd).slice(0, 100)); }
+      else if (pd.status === 401) { /* o módulo renova o token na próxima tentativa */ }
+      else if (pd.status === 403 || pd.status === 429) { console.log("quota, 40s..."); await sleep(40000); }
+      else { done = true; console.log("FALHA:", JSON.stringify(pd.erro).slice(0, 100)); }
     }
     await sleep(1500);
   }
